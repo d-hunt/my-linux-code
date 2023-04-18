@@ -4,7 +4,7 @@ import ast
 
 eye_data = []
 
-filename = 'eye_data_bypass_eq_fullres.txt'
+filename = '12G_6ft_eq_REV0.txt'
 
 with open(filename, 'r') as file:
     lines = file.readlines()
@@ -21,5 +21,27 @@ for i in range(len(eye_data)):
         if eye_data[i][j] > 2000:
             eye_data[i][j] = 2000
 
+def center_eye(input_list):
+    block_list = list(range(0, len(input_list[0])))
+
+    for i in range(len(input_list)):
+        for j in range(len(input_list[i])):
+            if input_list[i][j] != 2000:
+                if j in block_list: block_list.remove(j)
+
+    shift = int(sum(block_list)/len(block_list))
+
+    output_list =[]
+    for i in range(len(input_list)):
+        row_buffer=[]
+        for j in range(shift, len(input_list[i])):
+            row_buffer.append(input_list[i][j])
+        for j in range(0, shift):
+            row_buffer.append(input_list[i][j])
+        output_list.append(row_buffer)
+    return output_list
+
+#my_new_data = center_eye(eye_data)
+#print(my_new_data)
 plt.imshow(eye_data)
 plt.show()

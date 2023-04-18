@@ -15,11 +15,23 @@ channel = 1
 address = 0x20
 bus = smbus.SMBus(channel)
 
-
 eye_row = []
 eye_data = []
 data_buffer = []
 vert_val = [0,0,0,0,0,0]
+
+def generate_filename():
+    rate = input("Enter datarate: ")
+    length = input("Enter length: ")
+    eq = input("Equalized? Y or N: ")
+    rev = input("Enter Revision (rev0 or rev1): ")
+
+    if eq=='y' or eq=='Y':
+        eq = "eq"
+    else:
+        eq = "noeq"
+    filename = rev + "_" + rate + "_" + length + "_" + eq + ".txt"
+    return filename, eq
 
 def bin_array(value):
     # Convert the integer to a binary string with leading zeros
@@ -176,7 +188,34 @@ def auto_inc_read(addr, cs, length):
     bus.write_byte_data(address, 0x02, 0xFF)
     return output_list
     
+def save_to_file(mytext, filename):
+    with open(filename, mode='wt', encoding='utf-8') as myfile:
+        for lines in mytext:
+            print(lines, file = myfile)
+    myfile.close
 
+def center_eye(input_list):
+    block_list = list(range(0, len(input_list[0])))
+
+    for i in range(len(input_list)):
+        for j in range(len(input_list[i])):
+            if input_list[i][j] != 2000:
+                if j in block_list: block_list.remove(j)
+
+    shift = int(sum(block_list)/len(block_list))
+
+    output_list =[]
+    for i in range(len(input_list)):
+        row_buffer=[]
+        for j in range(shift, len(input_list[i])):
+            row_buffer.append(input_list[i][j])
+        for j in range(0, shift):
+            row_buffer.append(input_list[i][j])
+        output_list.append(row_buffer)
+    return output_list
+
+
+filename, eq = generate_filename()
 
 # This is to read the GPIO pins on port 0
 data = bus.read_byte_data(address,0x00)
@@ -199,12 +238,16 @@ send_gspi(0x0000, 0x2000, 1)
 send_gspi(0x0000, 0x2000, 2)
 
 # Configure the Eye Monitor Vertical and Phase Offsets
-# send_gspi(0x005a, 0x007f, 1) # 007f is the default horizontal offset and is required
-# send_gspi(0x005b, 0x0000, 1) # 00 is default and required, 04 reduces test time by 1/4
-# send_gspi(0x005c, 0xff00, 1) # ff is default and required, 04 reduces test time by 1/4
+send_gspi(0x005a, 0x007f, 1) # 007f is the default horizontal offset and is required
+send_gspi(0x005b, 0x0000, 1) # 00 is default and required, 04 reduces test time by 1/4
+send_gspi(0x005c, 0xff00, 1) # ff is default and required, 04 reduces test time by 1/4
 
 # Rest for a second
 time.sleep(1)
+
+# Disable the Equalizer
+if eq == "noeq":
+    send_gspi(0x0017, 0x0002, 1)
 
 send_gspi(0x005D, 0x0000, 1)
 
@@ -217,10 +260,27 @@ status = read_gspi(0x0090, 1)
 
 # Read rate detected by GS12341
 data = read_gspi(0x0087, 1)
-print("Rate detected by GS12341 is", data)
+data = data & 0x3
+
+if data == 6:
+    rate = " 12G"
+elif data == 5:
+    rate = "6G"
+elif data == 4:
+    rate = "3G"
+elif data == 3:
+    rate = "HD (1.485bps)"
+elif data == 2:
+    rate = "SD (275 Mbps)"
+elif data == 1:
+    rate = "MADI (125 Mbps)"
+else:
+    rate = "Unlocked"
+
+print("Rate detected by GS12341 is " + rate)
 
 # Get Data
-for i in range(256): # Read 256 vertical lines
+for i in range(16): # Read 64 vertical lines
     counter = 0
     while((status & 0x3 == 0) or (status & 0x3 == 1)):
         time.sleep(0.1) # Wait 1 second before re-reading status
@@ -239,9 +299,14 @@ for i in range(256): # Read 256 vertical lines
         time.sleep(0.1)
         length_raw = read_gspi(REG_OFFSET + 1, 1)
         length = int((length_raw-4)/2)
-        print(length)
+        print(i)
         eye_row = auto_inc_read(REG_OFFSET + 2, 1, length)    
-        eye_data.append(eye_row)
+        
+        if (len(eye_row) == 128):
+            eye_data.append(eye_row[0:31])
+            eye_data.append(eye_row[32:63])
+            eye_data.append(eye_row[64:95])
+            eye_data.append(eye_row[96:127])
 
         time.sleep(0.1)
         
@@ -263,13 +328,15 @@ for i in range(256): # Read 256 vertical lines
 send_gspi(0x005D, 0x0000, 1)
 
 # All the information is in eye_data 
-# Clean up data
+# Clean up data to remove any values greater than 2000
 for i in range(len(eye_data)):
     for j in range(len(eye_data[i])):
         if eye_data[i][j] > 2000:
             eye_data[i][j] = 2000
 
-print(eye_data)
+# print(eye_data)
 
+eye_data = center_eye(eye_data)
+save_to_file(eye_data, filename)
 plt.imshow(eye_data)
 plt.show()
