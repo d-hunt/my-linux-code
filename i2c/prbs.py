@@ -200,12 +200,21 @@ send_gspi(0x0000, 0x2000, 2)
 time.sleep(1)
 
 # Configure GS12281 for PRBS Generation
-send_gspi(0x0048, 0x0002, 2)    # Signal select
+send_gspi(0x0048, 0x0003, 2)    # Signal select
+time.sleep(1)
 send_gspi(0x0003, 0x0000, 2)    # Disable sleep
-send_gspi(0x0049, 0x0004, 2)    # Disable Mute
+time.sleep(1)
+send_gspi(0x0049, 0x0000, 2)    # Disable Mute
+time.sleep(1)
 send_gspi(0x004A, 0x0000, 2)    # Disable Auto-Disable (Disabled by Default)
-send_gspi(0x004B, 0x0504, 2)    # Slew Control
-send_gspi(0x0052, 0x0306, 2)    # Configure PRBS parameters
+time.sleep(1)
+send_gspi(0x004B, 0x0404, 2)    # Slew Control
+time.sleep(1)
+send_gspi(0x0052, 0x0106, 2)    # Configure PRBS parameters
+print("Starting Generator")
+send_gspi(0x0052, 0x0306, 2)   
+time.sleep(10)
+
 
 # Start Generator
 
@@ -275,4 +284,6 @@ while(checking):
 
     elif(status&0x3)== 0x2:
         checking = 0
-        send_gspi
+
+num_errors = read_gspi(0x0089, 1)
+print(num_errors)
